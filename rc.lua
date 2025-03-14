@@ -25,7 +25,6 @@ require("awful.hotkeys_popup.keys")
 local sharedtags = require("sharedtags")
 
 -- Load Debian menu entries
-local debian = require("debian.menu")
 local has_fdo, freedesktop = pcall(require, "freedesktop")
 
 -- {{{ Error handling
@@ -58,7 +57,17 @@ end
 -- }}}
 
 -- This is used later as the default terminal and editor to run.
-TERMINAL = "x-terminal-emulator"
+for _,emulator in ipairs({"kitty", "gnome-terminal", "xfce4-terminal", "x-terminal-emulator", "xterm"}) do
+	if os.execute("command -v " .. emulator) then
+		TERMINAL = emulator
+		break
+	end
+end
+
+if not TERMINAL then
+	error("Did not find a terminal")
+end
+
 local editor = os.getenv("EDITOR") or "editor"
 local editor_cmd = TERMINAL .. " -e " .. editor
 
@@ -95,7 +104,6 @@ else
 	MY_MAIN_MENU = awful.menu({
 		items = {
 			menu_awesome,
-			{ "Debian", debian.menu.Debian_menu.Debian },
 			menu_terminal,
 		}
 	})
@@ -217,9 +225,12 @@ awful.screen.connect_for_each_screen(function(s)
 		s.mytasklist, -- Middle widget
 		{             -- Right widgets
 			layout = wibox.layout.fixed.horizontal,
-			asampley.widgets.cpu_graph,
-			mykeyboardlayout,
-			wibox.widget.systray(),
+			{
+				layout = awful.widget.only_on_screen,
+				screen = 1,
+				asampley.widgets.cpu_graph,
+				wibox.widget.systray(),
+			},
 			mytextclock,
 			s.mylayoutbox,
 		},

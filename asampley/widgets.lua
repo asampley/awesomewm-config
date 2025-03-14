@@ -15,5 +15,5 @@ cpu_graph:set_color({
 vicious.register(cpu_graph, vicious.widgets.cpu, "$1", 1)
 
 return {
-	cpu_graph
+	cpu_graph = cpu_graph
 }

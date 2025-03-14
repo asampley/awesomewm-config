@@ -9,7 +9,7 @@ local naughty = require('naughty')
 local sharedtags = require("sharedtags")
 local xrandr = require("xrandr")
 
-local has_pactl = os.execute("command -v pactl") ~= 0
+local has_pactl = os.execute("command -v pactl")
 
 local volume = {}
 
@@ -40,13 +40,13 @@ local globalkeys = gears.table.join(
 
 					local mode = input:sub(1, 1):lower()
 					if mode == 'p' then
-						awful.spawn { 'systemctl', 'poweroff' }
+						awful.spawn { 'loginctl', 'poweroff' }
 					elseif mode == 's' then
-						awful.spawn.with_shell('loginctl lock-session && systemctl suspend')
+						awful.spawn.with_shell('loginctl lock-session && loginctl suspend')
 					elseif mode == 'h' then
-						awful.spawn.with_shell('loginctl lock-session && systemctl hibernate')
+						awful.spawn.with_shell('loginctl lock-session && loginctl hibernate')
 					elseif mode == 'r' then
-						awful.spawn { 'systemctl', 'reboot' }
+						awful.spawn { 'loginctl', 'reboot' }
 					elseif mode == 'l' then
 						awful.spawn { 'loginctl', 'lock-session' }
 					else
