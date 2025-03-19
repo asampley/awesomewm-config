@@ -23,13 +23,8 @@ beautiful.init(gears.filesystem.get_configuration_dir() .. "theme.lua")
 return setmetatable(
     {}, {
         -- load submodules lazily to let this be requiredRand allow access to submodules
-        __index = function(table, key)
-            local loaded, t = pcall(require, 'asampley.'..key)
-
-            if loaded then
-                table[key] = t
-                return t
-            end
+        __index = function(_, key)
+            return require('asampley.'..key)
         end
     }
 )
