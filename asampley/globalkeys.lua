@@ -9,18 +9,44 @@ local naughty = require('naughty')
 local sharedtags = require("sharedtags")
 local xrandr = require("xrandr")
 
-local has_pactl = os.execute("command -v pactl")
+local commands = {}
 
-local volume = {}
+local undetected = function() naughty.notify { text = "Attempted to run undetected command" } end
 
-if has_pactl then
-	volume.up = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ +5%", false) end
-	volume.down = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ -5%", false) end
-	volume.mute = function() awful.util.spawn("pactl set-sink-mute @DEFAULT_SINK@ toggle", false) end
+if os.execute("command -v pactl") then
+	commands.volume = {
+		up = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ +5%", false) end
+		down = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ -5%", false) end
+		mute = function() awful.util.spawn("pactl set-sink-mute @DEFAULT_SINK@ toggle", false) end
+	}
+elseif os.execute("command -v amixer") then
+	commands.volume = {
+		up = function() awful.util.spawn("amixer set Master 10%+", false) end
+		down = function() awful.util.spawn("amixer set Master 10%-", false) end
+		mute = function() awful.util.spawn("amixer sset Master toggle", false) end
+	}
 else
-	volume.up = function() awful.util.spawn("amixer set Master 10%+", false) end
-	volume.down = function() awful.util.spawn("amixer set Master 10%-", false) end
-	volume.mute = function() awful.util.spawn("amixer sset Master toggle", false) end
+	commands.volume = {
+		up = undetected,
+		down = undetected,
+		mute = undetected,
+	}
+end
+
+if os.execute("command -v systemctl") then
+	commands.power = {
+		poweroff = function() awful.spawn { "systemctl", "poweroff" } end,
+		suspend = function() awful.spawn { "systemctl", "suspend" } end,
+		hibernate = function() awful.spawn { "systemctl", "hibernate" } end,
+		restart = function() awful.spawn { "systemctl", "reboot" } end,
+	}
+else
+	commands.power = {
+		poweroff = undetected,
+		suspend = undetected,
+		hibernate = undetected,
+		restart = undetected,
+	}
 end
 
 local hotkeys_popup = require("awful.hotkeys_popup")
@@ -39,18 +65,12 @@ local globalkeys = gears.table.join(
 					if not input or #input == 0 then return end
 
 					local mode = input:sub(1, 1):lower()
-					if mode == 'p' then
-						awful.spawn { 'loginctl', 'poweroff' }
-					elseif mode == 's' then
-						awful.spawn.with_shell('loginctl lock-session && loginctl suspend')
-					elseif mode == 'h' then
-						awful.spawn.with_shell('loginctl lock-session && loginctl hibernate')
-					elseif mode == 'r' then
-						awful.spawn { 'loginctl', 'reboot' }
-					elseif mode == 'l' then
-						awful.spawn { 'loginctl', 'lock-session' }
-					else
-						naughty.notify { text = 'Unknown shutdown method "' .. input .. '"' }
+					if mode == 'p' then commands.power.poweroff();
+					elseif mode == 's' then commands.power.shutdown();
+					elseif mode == 'h' then commands.power.hibernate();
+					elseif mode == 'r' then commands.power.restart();
+					elseif mode == 'l' then awful.spawn { 'loginctl', 'lock-session' }
+					else naughty.notify { text = 'Unknown shutdown method "' .. input .. '"' }
 					end
 				end
 			}
