@@ -13,17 +13,20 @@ local commands = {}
 
 local undetected = function() naughty.notify { text = "Attempted to run undetected command" } end
 
+local screenshot_directory = os.getenv("HOME").."/Pictures/Screenshots"
+os.execute("mkdir -p '"..screenshot_directory.."'")
+
 if os.execute("command -v pactl") then
 	commands.volume = {
-		up = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ +5%", false) end
-		down = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ -5%", false) end
-		mute = function() awful.util.spawn("pactl set-sink-mute @DEFAULT_SINK@ toggle", false) end
+		up = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ +5%", false) end,
+		down = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ -5%", false) end,
+		mute = function() awful.util.spawn("pactl set-sink-mute @DEFAULT_SINK@ toggle", false) end,
 	}
 elseif os.execute("command -v amixer") then
 	commands.volume = {
-		up = function() awful.util.spawn("amixer set Master 10%+", false) end
-		down = function() awful.util.spawn("amixer set Master 10%-", false) end
-		mute = function() awful.util.spawn("amixer sset Master toggle", false) end
+		up = function() awful.util.spawn("amixer set Master 10%+", false) end,
+		down = function() awful.util.spawn("amixer set Master 10%-", false) end,
+		mute = function() awful.util.spawn("amixer sset Master toggle", false) end,
 	}
 else
 	commands.volume = {
@@ -47,6 +50,39 @@ else
 		hibernate = undetected,
 		restart = undetected,
 	}
+end
+
+if os.execute("command -v scrot") then
+	local scrot = function(opts)
+		local ret = "scrot"
+
+		if opts.selection then ret = ret.." -s" end
+		if opts.clipboard then
+			ret = ret.." - | xclip -selection clipboard -t image/png"
+		else
+			ret = ret.." '"..screenshot_directory.."/%FT%T"..".png'"
+		end
+
+		naughty.notify({ text = ret })
+
+		return ret
+	end
+
+	commands.screenshot = function(opts) awful.spawn.with_shell(scrot(opts)) end
+
+	if not os.execute("command -v xclip") then
+		local _old = commands.screenshot
+
+		commands.screenshot = function(opts)
+			if opts.clipboard then
+				return undetected()
+			else
+				return _old(opts)
+			end
+		end
+	end
+else
+	commands.screenshot = undetected
 end
 
 local hotkeys_popup = require("awful.hotkeys_popup")
@@ -76,7 +112,7 @@ local globalkeys = gears.table.join(
 			}
 		end,
 		{ description = "power options", group = "awesome" }),
-	awful.key({ modkey, }, "?", hotkeys_popup.show_help,
+	awful.key({ modkey, "Shift" }, "/", hotkeys_popup.show_help,
 		{ description = "show help", group = "awesome" }),
 	awful.key({ modkey, }, "Left", awful.tag.viewprev,
 		{ description = "view previous", group = "tag" }),
@@ -175,9 +211,19 @@ local globalkeys = gears.table.join(
 		{ description = "show the menubar", group = "launcher" }),
 
 	-- audio
-	awful.key({}, "XF86AudioRaiseVolume", volume.up),
-	awful.key({}, "XF86AudioLowerVolume", volume.down),
-	awful.key({}, "XF86AudioMute", volume.mute),
+	awful.key({}, "XF86AudioRaiseVolume", commands.volume.up),
+	awful.key({}, "XF86AudioLowerVolume", commands.volume.down),
+	awful.key({}, "XF86AudioMute", commands.volume.mute),
+
+	-- screenshot
+	awful.key({ modkey,                    }, "s", function() commands.screenshot { } end,
+		{ description = "take screenshot", group = "screenshot" }),
+	awful.key({ modkey,            "Shift" }, "s", function() commands.screenshot { selection = true } end,
+		{ description = "take screenshot of selection", group = "screenshot" }),
+	awful.key({ modkey, "Control"          }, "s", function() commands.screenshot { clipboard = true } end,
+		{ description = "take screenshot to clipboard", group = "screenshot" }),
+	awful.key({ modkey, "Control", "Shift" }, "s", function() commands.screenshot { clipboard = true, selection = true } end,
+		{ description = "take screenshot of selection to clipboard", group = "screenshot" }),
 
 	-- xrandr
 	awful.key({ modkey, "Control", "Shift" }, "d", xrandr.xrandr)
