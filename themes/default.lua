@@ -1,7 +1,3 @@
----------------------------
--- Default awesome theme --
----------------------------
-
 local theme_assets = require("beautiful.theme_assets")
 local xresources = require("beautiful.xresources")
 local dpi = xresources.apply_dpi
@@ -21,7 +17,7 @@ theme.bg_systray    = theme.bg_normal
 
 theme.fg_normal     = "#8ba7a7"
 theme.fg_focus      = "#ffffff"
-theme.fg_urgent     = theme.bg_normal
+theme.fg_urgent     = theme.fg_normal
 theme.fg_minimize   = "#777777"
 
 theme.useless_gap   = dpi(0)
@@ -138,5 +134,3 @@ theme.awesome_icon = theme_assets.awesome_icon(
 theme.icon_theme = nil
 
 return theme
-
--- vim: filetype=lua:expandtab:shiftwidth=4:tabstop=8:softtabstop=4:textwidth=80

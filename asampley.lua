@@ -18,7 +18,9 @@ awful.spawn.with_shell(
     'dex --environment Awesome --autostart'
 )
 
-beautiful.init(gears.filesystem.get_configuration_dir() .. "theme.lua")
+if not beautiful.init(gears.filesystem.get_configuration_dir() .. "themes/tinted_theming.lua") then
+	beautiful.init(gears.filesystem.get_configuration_dir() .. "themes/default.lua")
+end
 
 return setmetatable(
     {}, {
