@@ -9,81 +9,117 @@ local naughty = require('naughty')
 local sharedtags = require("sharedtags")
 local xrandr = require("xrandr")
 
-local commands = {}
-
 local undetected = function() naughty.notify { text = "Attempted to run undetected command" } end
+local map_any_command = function(commands, default)
+	local found = false
 
-local screenshot_directory = os.getenv("HOME").."/Pictures/Screenshots"
-os.execute("mkdir -p '"..screenshot_directory.."'")
+	for command,v in pairs(commands) do
+		if os.execute("command -v '" .. command .. "'") then
+			return v
+		end
+	end
 
-if os.execute("command -v pactl") then
-	commands.volume = {
-		up = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ +5%", false) end,
-		down = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ -5%", false) end,
-		mute = function() awful.util.spawn("pactl set-sink-mute @DEFAULT_SINK@ toggle", false) end,
+	local text = ""
+
+	for command,_ in pairs(commands) do
+		text = text .. " '" .. command .. "'"
+	end
+
+	naughty.notify {
+		preset = naughty.config.presets.critical,
+		title = "Expecting at least one of these commands",
+		text = text,
 	}
-elseif os.execute("command -v amixer") then
-	commands.volume = {
-		up = function() awful.util.spawn("amixer set Master 10%+", false) end,
-		down = function() awful.util.spawn("amixer set Master 10%-", false) end,
-		mute = function() awful.util.spawn("amixer sset Master toggle", false) end,
-	}
-else
-	commands.volume = {
+	
+	return default
+end
+
+local commands = {
+	volume = {
 		up = undetected,
 		down = undetected,
 		mute = undetected,
-	}
-end
-
-if os.execute("command -v systemctl") then
-	commands.power = {
-		poweroff = function() awful.spawn { "systemctl", "poweroff" } end,
-		suspend = function() awful.spawn { "systemctl", "suspend" } end,
-		hibernate = function() awful.spawn { "systemctl", "hibernate" } end,
-		restart = function() awful.spawn { "systemctl", "reboot" } end,
-	}
-else
-	commands.power = {
+	},
+	power = {
 		poweroff = undetected,
 		suspend = undetected,
 		hibernate = undetected,
 		restart = undetected,
-	}
-end
+	},
+	screenshot = undetected
+}
 
-if os.execute("command -v scrot") then
-	local scrot = function(opts)
-		local ret = "scrot"
+-- Set up locking which is handled in other desktop environments
+local lock = map_any_command {
+	["xss-lock"] = map_any_command({
+		slock = "slock",
+		i3lock = "i3lock -n",
+	}, false),
+}
 
-		if opts.selection then ret = ret.." -s" end
-		if opts.clipboard then
-			ret = ret.." - | xclip -selection clipboard -t image/png"
-		else
-			ret = ret.." '"..screenshot_directory.."/%FT%T"..".png'"
+if lock then awful.util.spawn("xss-lock -- " .. lock) end
+
+local screenshot_directory = os.getenv("HOME").."/Pictures/Screenshots"
+os.execute("mkdir -p '"..screenshot_directory.."'")
+
+commands.volume = map_any_command {
+	pactl = {
+		up = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ +5%", false) end,
+		down = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ -5%", false) end,
+		mute = function() awful.util.spawn("pactl set-sink-mute @DEFAULT_SINK@ toggle", false) end,
+	},
+	amixer = {
+		up = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ +5%", false) end,
+		down = function() awful.util.spawn("pactl set-sink-volume @DEFAULT_SINK@ -5%", false) end,
+		mute = function() awful.util.spawn("pactl set-sink-mute @DEFAULT_SINK@ toggle", false) end,
+	},
+} or commands.volume
+
+map_any_command({
+	systemctl = function()
+		commands.power.poweroff = function() awful.spawn { "systemctl", "poweroff" } end
+		commands.power.restart = function() awful.spawn { "systemctl", "reboot" } end
+		map_any_command({
+			loginctl = function()
+				commands.power.suspend = function() awful.spawn.with_shell("loginctl lock-session && systemctl suspend") end
+				commands.power.hibernate = function() awful.spawn("loginctl lock-session && systemctl hibernate") end
+			end
+		}, function() end)()
+	end
+}, function() end)()
+
+map_any_command({
+	scrot = function()
+		local scrot = function(opts)
+			local ret = "scrot"
+
+			if opts.selection then ret = ret.." -s" end
+			if opts.clipboard then
+				ret = ret.." - | xclip -selection clipboard -t image/png"
+			else
+				ret = ret.." '"..screenshot_directory.."/%FT%T"..".png'"
+			end
+
+			naughty.notify({ text = ret })
+
+			return ret
 		end
 
-		naughty.notify({ text = ret })
+		commands.screenshot = function(opts) awful.spawn.with_shell(scrot(opts)) end
 
-		return ret
-	end
+		if not os.execute("command -v xclip") then
+			local _old = commands.screenshot
 
-	commands.screenshot = function(opts) awful.spawn.with_shell(scrot(opts)) end
-
-	if not os.execute("command -v xclip") then
-		local _old = commands.screenshot
-
-		commands.screenshot = function(opts)
-			if opts.clipboard then
-				return undetected()
-			else
-				return _old(opts)
+			commands.screenshot = function(opts)
+				if opts.clipboard then
+					return undetected()
+				else
+					return _old(opts)
+				end
 			end
 		end
 	end
-else
-	commands.screenshot = undetected
-end
+})()
 
 local hotkeys_popup = require("awful.hotkeys_popup")
 -- Enable hotkeys help widget for VIM and other apps
@@ -102,7 +138,7 @@ local globalkeys = gears.table.join(
 
 					local mode = input:sub(1, 1):lower()
 					if mode == 'p' then commands.power.poweroff();
-					elseif mode == 's' then commands.power.shutdown();
+					elseif mode == 's' then commands.power.suspend();
 					elseif mode == 'h' then commands.power.hibernate();
 					elseif mode == 'r' then commands.power.restart();
 					elseif mode == 'l' then awful.spawn { 'loginctl', 'lock-session' }
